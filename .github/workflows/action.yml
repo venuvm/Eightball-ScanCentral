@@ -49,7 +49,7 @@ jobs:
         env:                                            
           SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
           SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
-          APPLICATION: "First App"
+          APPLICATION: "First"
           VERSION: "1.0"
           BUILD_OPTS: "-bt none"
 
