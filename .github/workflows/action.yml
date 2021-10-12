@@ -18,6 +18,7 @@ jobs:
       - name: Check Out Source Code
         uses: actions/checkout@v2
         with:
+          path: '' 
           # Fetch at least the immediate parents so that if this is a pull request then we can checkout the head.
           fetch-depth: 2
       # If this run was triggered by a pull request event, then checkout the head of the pull request instead of the merge commit.
@@ -31,13 +32,14 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 11
-
+      
       ### Set up Fortify ScanCentral Client ###
       - name: Fortify ScanCentral Scan
         uses: fortify/gha-setup-scancentral-client@v1.2.0
    
         with:
-          version: 20.2.0                                      # Optional as 20.2.0 is the default
+          version: 21.1.2                                      # On-prem customers should specify a client version that matches their ScanCentral environment
+                                                               # FoD customers usually should not specify a version but rather rely on the default version
           client-auth-token: ${{ secrets.CLIENT_AUTH_TOKEN }}  # Optional, but required if ScanCentral Controller requires client authentication
 
       ### Run Fortify ScanCentral Client ###
@@ -45,17 +47,17 @@ jobs:
       #   ScanCentral Client will download dependencies for maven, gradle and msbuild projects.
       #   For other build tools, add your build commands to the workflow to download necessary dependencies and prepare according to Fortify SCA documentation.
       - name: Perform SAST Scan
-      - run: scancentral -url ${URL} start $BUILD_OPTS -upload -application $APPLICATION -version $VERSION -uptoken $TOKEN
+        run: scancentral -url ${SC_CONTROLLER_URL} start $BUILD_OPTS -upload -application $APPLICATION -version $VERSION -uptoken $SSC_UPLOAD_TOKEN
         env:                                            
-          URL: ${{ secrets.SSC_URL }}
-          TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
-          APPLICATION: "DELETE"
+          SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
+          SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
+          APPLICATION: "GITHUB-SELFHOSTED-SC"
           VERSION: "1.0"
           BUILD_OPTS: "-bt none"
 
       ### Archive ScanCentral Client logs on failure ###
       - name: Save ScanCentral Logs
-      - uses: actions/upload-artifact@v2                
+        uses: actions/upload-artifact@v2                
         if: failure()
         with:
            name: scancentral-logs
