@@ -49,8 +49,8 @@ jobs:
         env:                                            
           SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
           SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
-          APPLICATION: "One"
-          VERSION: "One"
+          APPLICATION: "GITHUB-SELFHOSTED-SC"
+          VERSION: "1.0"
           BUILD_OPTS: "-bt none"
 
       ### Archive ScanCentral Client logs on failure ###
