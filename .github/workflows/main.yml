@@ -33,8 +33,8 @@ jobs:
           java-version: 11
 
       ### Set up Fortify ScanCentral Client ###
-      - name: Download Fortify ScanCentral Client
-        uses: fortify/gha-setup-scancentral-client@v1   
+      - name: Fortify ScanCentral Scan
+        uses: fortify/gha-setup-scancentral-client@v1.2.0   
         with:
           version: 21.1.2                                      # On-prem customers should specify a client version that matches their ScanCentral environment
                                                                # FoD customers usually should not specify a version but rather rely on the default version
@@ -49,9 +49,9 @@ jobs:
         env:                                            
           SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
           SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
-          APPLICATION: "My Application"
+          APPLICATION: "DELETE"
           VERSION: "1.0"
-          BUILD_OPTS: "-bt mvn"
+          BUILD_OPTS: "-bt none"
 
       ### Archive ScanCentral Client logs on failure ###
       - name: Save ScanCentral Logs
