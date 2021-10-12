@@ -11,13 +11,14 @@ on:
 jobs:                                                  
   Fortify-SAST:
     # Use the appropriate runner for building your source code
-    runs-on: ubuntu-latest 
+    runs-on: self-hosted 
 
     steps:
       # Check out source code
       - name: Check Out Source Code
         uses: actions/checkout@v2
         with:
+          path: '' 
           # Fetch at least the immediate parents so that if this is a pull request then we can checkout the head.
           fetch-depth: 2
       # If this run was triggered by a pull request event, then checkout the head of the pull request instead of the merge commit.
@@ -31,10 +32,11 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 11
-
+      
       ### Set up Fortify ScanCentral Client ###
-      - name: Download Fortify ScanCentral Client
-        uses: fortify/gha-setup-scancentral-client@v1   
+      - name: Fortify ScanCentral Scan
+        uses: fortify/gha-setup-scancentral-client@v1.2.0
+   
         with:
           version: 21.1.2                                      # On-prem customers should specify a client version that matches their ScanCentral environment
                                                                # FoD customers usually should not specify a version but rather rely on the default version
@@ -49,9 +51,9 @@ jobs:
         env:                                            
           SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
           SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
-          APPLICATION: "DELETE"
+          APPLICATION: "GITHUB-SELFHOSTED-SC"
           VERSION: "1.0"
-          BUILD_OPTS: "-bt mvn"
+          BUILD_OPTS: "-bt none"
 
       ### Archive ScanCentral Client logs on failure ###
       - name: Save ScanCentral Logs
