@@ -1,7 +1,8 @@
 name: Fortify ScanCentral SAST Scan
 on:
   
-   push:
+  
+  push:
     # Master or main branch that you want to trigger this workflow for
     branches: main
   pull_request:
