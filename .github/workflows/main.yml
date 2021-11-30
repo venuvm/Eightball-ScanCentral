@@ -1,6 +1,7 @@
 name: Fortify ScanCentral SAST Scan
 on:
-  
+
+
   
   push:
     # Master or main branch that you want to trigger this workflow for
