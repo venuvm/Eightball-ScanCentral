@@ -10,6 +10,7 @@ on:
     # The branches below must be a subset of the branches above
     branches: [main]
 
+
 jobs:                                                  
   Fortify-SAST:
     # Use the appropriate runner for building your source code
