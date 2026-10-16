@@ -6,10 +6,7 @@ public class EightBall {
 		String filename = args[0];
 
 
-
-
-		
-		//Modified
+		/Modified
 
 	try {
 			System.out.println("sample");
