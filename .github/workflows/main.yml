@@ -17,6 +17,7 @@ jobs:
     steps:
 
 
+          
       - name: Get modified files via Native API
         shell: cmd
         env:
@@ -31,7 +32,8 @@ jobs:
               $url = 'https://github.com{{ github.repository }}/commits/${{ github.sha }}'; ^
               $res = Invoke-RestMethod -Uri $url -Headers $headers -Method Get; $files = $res.files.filename; ^
           }; ^
-          if ($files) { foreach ($f in $files) { Write-Output $f } } else { Write-Output 'No modified files found.' }
+          if ($files) { foreach ($f in $files) { Write-Output $f } } else { Write-Output 'No modified files found.' }"
+
 
 
 
