@@ -16,22 +16,18 @@ jobs:
     runs-on: self-hosted 
     steps:
 
-      - name: Install Git
-        uses: crazy-max/ghaction-chocolatey@v3
-        with:
-          args: install git -y
+      - name: Get modified files via API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch changed files list directly from the GitHub API
+          $files = gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files --jq '.[].filename'
           
-      # 1. Checkout code with history depth
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
+          # Display files
+          Write-Output "Modified files:"
+          $files
 
-      # 2. Get modified files
-      - name: Get modified files
-        run: git diff --name-only --diff-filter=M HEAD^ HEAD
-    
-
+      
     
       # Check out source code
       - name: Check Out Source Code
