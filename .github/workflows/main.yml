@@ -1,11 +1,3 @@
-name: Get changed files
-  id: changed-files
-  uses: tj-actions/changed-files@v45 # Use the latest stable version
-
-name: List only modified files
-  run: |
-    echo "Modified files: ${{ steps.changed-files.outputs.modified_files }}"
-
 name: Fortify ScanCentral SAST Scan
 on:
 
@@ -22,8 +14,19 @@ jobs:
   Fortify-SAST:
     # Use the appropriate runner for building your source code
     runs-on: self-hosted 
-
     steps:
+      # 1. Checkout code with history depth
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # 2. Get modified files
+      - name: Get modified files
+        run: git diff --name-only --diff-filter=M HEAD^ HEAD
+    
+
+    
       # Check out source code
       - name: Check Out Source Code
         uses: actions/checkout@v2
