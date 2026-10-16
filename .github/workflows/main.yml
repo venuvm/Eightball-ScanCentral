@@ -16,40 +16,29 @@ jobs:
     runs-on: self-hosted 
     steps:
 
+
       - name: Get modified files via Native API
-        shell: powershell
+        shell: cmd
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 1. Prepare Authorization Headers
-          $headers = @{
-              "Authorization" = "Bearer $env:GITHUB_TOKEN"
-              "Accept"        = "application/vnd.github.v3+json"
-          }
+          powershell -ExecutionPolicy Bypass -Command ^
+          "$headers = @{ 'Authorization' = 'Bearer %GITHUB_TOKEN%'; 'Accept' = 'application/vnd.github.v3+json' }; ^
+          if ('${{ github.event_name }}' -eq 'pull_request') { ^
+              $url = 'https://github.com{{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files'; ^
+              $res = Invoke-RestMethod -Uri $url -Headers $headers -Method Get; $files = $res.filename; ^
+          } else { ^
+              $url = 'https://github.com{{ github.repository }}/commits/${{ github.sha }}'; ^
+              $res = Invoke-RestMethod -Uri $url -Headers $headers -Method Get; $files = $res.files.filename; ^
+          }; ^
+          if ($files) { foreach ($f in $files) { Write-Output $f } } else { Write-Output 'No modified files found.' }
 
-          # 2. Handle both Pull Request and Push event contexts
-          if ("${{ github.event_name }}" -eq "pull_request") {
-              $url = "https://github.com{{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files"
-              $response = Invoke-RestMethod -Uri $url -Headers $headers -Method Get
-              $files = $response.filename
-          } else {
-              # Fallback for direct push events
-              $url = "https://github.com{{ github.repository }}/commits/${{ github.sha }}"
-              $response = Invoke-RestMethod -Uri $url -Headers $headers -Method Get
-              $files = $response.files.filename
-          }
 
-          # 3. Output the modified files
-          Write-Output "--- Modified Files ---"
-          if ($files) {
-              foreach ($file in $files) {
-                  Write-Output $file
-              }
-          } else {
-              Write-Output "No modified files found."
-          }
-      
-    
+
+
+
+
+          
       # Check out source code
       - name: Check Out Source Code
         uses: actions/checkout@v4
