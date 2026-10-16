@@ -18,17 +18,20 @@ jobs:
 
 
           
-      - name: Get modified files via VBScript (Safe Env Mapping)
-        shell: cmd
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_EVENT_NAME: ${{ github.event_name }}
-          GH_REPOSITORY: ${{ github.repository }}
-          GH_PR_NUMBER: ${{ github.event.pull_request.number }}
-          GH_SHA: ${{ github.sha }}
-        run: |
-          mshta vbscript:Execute("Set env=CreateObject(""WScript.Shell"").Environment(""PROCESS""):Set h=CreateObject(""MSXML2.ServerXMLHTTP.6.0""):If env(""GH_EVENT_NAME"")=""pull_request"" Then:u=""https://github.com"" & env(""GH_REPOSITORY"") & ""/pulls/"" & env(""GH_PR_NUMBER"") & ""/files"":Else:u=""https://github.com"" & env(""GH_REPOSITORY"") & ""/commits/"" & env(""GH_SHA""):End If:h.open ""GET"",u,False:h.setRequestHeader ""Authorization"",""Bearer "" & env(""GITHUB_TOKEN""):h.setRequestHeader ""Accept"",""application/vnd.github.v3+json"":h.send():txt=h.responseText:Set w=CreateObject(""Scripting.FileSystemObject"").GetStandardStream(1):If InStr(txt,""""filename"""")>0 Then:lines=Split(txt,""""filename""""):For i=1 To UBound(lines):val=Split(lines(i),"""""""")(2):w.WriteLine val:Next:Else:w.WriteLine ""No modified files found."":End If:close()")
+      - name: Get modified files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
+      # 2. Output files list securely using an official ecosystem step
+      - name: List all changed files
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          echo "The following files changed:"
+          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            echo "$file"
+          done
 
 
 
