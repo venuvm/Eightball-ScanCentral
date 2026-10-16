@@ -15,6 +15,12 @@ jobs:
     # Use the appropriate runner for building your source code
     runs-on: self-hosted 
     steps:
+
+      - name: Install Git
+        uses: chocolatey/chocolatey-action@v1.1.0
+        with:
+          args: install git -y
+          
       # 1. Checkout code with history depth
       - name: Checkout code
         uses: actions/checkout@v4
