@@ -16,17 +16,38 @@ jobs:
     runs-on: self-hosted 
     steps:
 
-      - name: Get modified files via API
+      - name: Get modified files via Native API
+        shell: powershell
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch changed files list directly from the GitHub API
-          $files = gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files --jq '.[].filename'
-          
-          # Display files
-          Write-Output "Modified files:"
-          $files
+          # 1. Prepare Authorization Headers
+          $headers = @{
+              "Authorization" = "Bearer $env:GITHUB_TOKEN"
+              "Accept"        = "application/vnd.github.v3+json"
+          }
 
+          # 2. Handle both Pull Request and Push event contexts
+          if ("${{ github.event_name }}" -eq "pull_request") {
+              $url = "https://github.com{{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files"
+              $response = Invoke-RestMethod -Uri $url -Headers $headers -Method Get
+              $files = $response.filename
+          } else {
+              # Fallback for direct push events
+              $url = "https://github.com{{ github.repository }}/commits/${{ github.sha }}"
+              $response = Invoke-RestMethod -Uri $url -Headers $headers -Method Get
+              $files = $response.files.filename
+          }
+
+          # 3. Output the modified files
+          Write-Output "--- Modified Files ---"
+          if ($files) {
+              foreach ($file in $files) {
+                  Write-Output $file
+              }
+          } else {
+              Write-Output "No modified files found."
+          }
       
     
       # Check out source code
