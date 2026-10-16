@@ -32,20 +32,24 @@ jobs:
 
 
 
+ 
+
+      # 2. Fetch the changed files
       - name: Get modified files
         id: changed-files
         uses: tj-actions/changed-files@v45
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 2. Output files list securely using an official ecosystem step
+      # 3. Output files list securely using correct PowerShell loops
       - name: List all changed files
         if: steps.changed-files.outputs.any_changed == 'true'
         run: |
-          echo "The following files changed:"
-          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
-            echo "$file"
-          done
+          Write-Output "The following files changed:"
+          $files = "${{ steps.changed-files.outputs.all_changed_files }}" -split " "
+          foreach ($file in $files) {
+              Write-Output $file
+          }
 
 
 
