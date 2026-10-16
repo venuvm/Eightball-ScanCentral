@@ -18,22 +18,25 @@ jobs:
 
 
           
-      - name: Get modified files via Native API
+      - name: Get modified files via Node.js
         shell: cmd
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
         run: |
-          powershell -ExecutionPolicy Bypass -Command ^
-          "$headers = @{ 'Authorization' = 'Bearer %GITHUB_TOKEN%'; 'Accept' = 'application/vnd.github.v3+json' }; ^
-          if ('${{ github.event_name }}' -eq 'pull_request') { ^
-              $url = 'https://github.com{{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files'; ^
-              $res = Invoke-RestMethod -Uri $url -Headers $headers -Method Get; $files = $res.filename; ^
-          } else { ^
-              $url = 'https://github.com{{ github.repository }}/commits/${{ github.sha }}'; ^
-              $res = Invoke-RestMethod -Uri $url -Headers $headers -Method Get; $files = $res.files.filename; ^
-          }; ^
-          if ($files) { foreach ($f in $files) { Write-Output $f } } else { Write-Output 'No modified files found.' }"
-
+          node -e " + ^
+          const fs = require('fs'); + ^
+          const token = process.env.GITHUB_TOKEN; + ^
+          const repo = '\${{ github.repository }}'; + ^
+          const isPR = '\${{ github.event_name }}' === 'pull_request'; + ^
+          const url = isPR ? `https://github.com{repo}/pulls/${{ github.event.pull_request.number }}/files` : `https://github.com{repo}/commits/${{ github.sha }}`; + ^
+          fetch(url, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' } }) + ^
+            .then(res => res.json()) + ^
+            .then(data => { + ^
+              const files = isPR ? data.map(f => f.filename) : (data.files ? data.files.map(f => f.filename) : []); + ^
+              console.log('--- Modified Files ---'); + ^
+              if (files.length > 0) { files.forEach(f => console.log(f)); } + ^
+              else { console.log('No modified files found.'); } + ^
+            }).catch(err => { console.error(err); process.exit(1); });"
 
 
 
