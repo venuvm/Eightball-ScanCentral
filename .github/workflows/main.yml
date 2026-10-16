@@ -51,18 +51,6 @@ jobs:
               Write-Output $file
           }
 
-
-
-
-
-
-
-
-
-
-
-
-
         
 
       # Java is required to run ScanCentral Client, and may be required for your build
