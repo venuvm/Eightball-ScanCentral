@@ -17,7 +17,7 @@ jobs:
     steps:
 
       - name: Install Git
-        uses: chocolatey/chocolatey-action@v1.1.0
+        uses: crazy-max/ghaction-chocolatey@v3
         with:
           args: install git -y
           
