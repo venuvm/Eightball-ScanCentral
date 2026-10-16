@@ -6,15 +6,13 @@ public class EightBall {
 		String filename = args[0];
 
 
-
-
-		
-		
-		try {
+	try {
 			System.out.println("sample");
 			
 			filename = "" + (Integer.parseInt(filename) % 3);
-		} catch (Exception e) {
+		} 
+	catch (Exception e) 
+		{
 			System.out.println("Invalid input.");
 		}
 		new FileReader(filename).read(buffer);
