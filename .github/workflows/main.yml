@@ -85,18 +85,32 @@ jobs:
         if: steps.changed-files.outputs.any_changed == 'true'
         
         run: |
-          Write-Output "The following files changed:"
+          Write-Output "Preparing changed files for ScanCentral..."
 
+          # Verify Controller URL is available
+          if ([string]::IsNullOrWhiteSpace($env:SC_CONTROLLER_URL)) {
+            throw "SC_CONTROLLER_URL is not configured."
+          }
+
+          Write-Output "ScanCentral Controller URL: $env:SC_CONTROLLER_URL"
+
+          # Get changed files
           $files = "${{ steps.changed-files.outputs.all_changed_files }}" -split " "
+
           $includeArgs = @()
 
           foreach ($file in $files) {
-          if (-not [string]::IsNullOrWhiteSpace($file)) {
-            Write-Output "Including changed file: $file"
 
-            $includeArgs += "-include"
-            $includeArgs += "./$file"
-          }
+            if (-not [string]::IsNullOrWhiteSpace($file)) {
+
+              # Normalize Windows-style paths for ScanCentral
+              $normalizedFile = $file -replace '\\', '/'
+
+              Write-Output "Including changed file: $normalizedFile"
+
+              $includeArgs += "-include"
+              $includeArgs += "./$normalizedFile"
+            }
           }
 
           Write-Output "Number of changed files: $($includeArgs.Count / 2)"
@@ -104,13 +118,31 @@ jobs:
           Write-Output ($includeArgs -join " ")
 
           if ($includeArgs.Count -gt 0) {
+
             Write-Output "Starting ONE ScanCentral scan for all changed files..."
-      
-            & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "$env:APPLICATION" --application-version "$env:VERSION" -uptoken "$env:SSC_UPLOAD_TOKEN" 
+
+            & scancentral `
+              -url "$env:SC_CONTROLLER_URL" 
+              start 
+              -upload 
+              --application "$env:APPLICATION" 
+              --application-version "$env:VERSION" 
+              -uptoken "$env:SSC_UPLOAD_TOKEN" 
+              @includeArgs
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "ScanCentral failed with exit code $LASTEXITCODE"
+            }
+
           }
           else {
+
             Write-Output "No changed files found. ScanCentral scan skipped."
+
           }
+
+
+          
       ### Archive ScanCentral Client logs on failure ###
       - name: Save ScanCentral Logs
         uses: actions/upload-artifact@v4                
