@@ -63,7 +63,7 @@ jobs:
       
       ### Set up Fortify ScanCentral Client ###
       - name: Fortify ScanCentral Scan
-        uses: fortify/gha-setup-scancentral-client@v1.2.0
+        uses: fortify/gha-setup-scancentral-client@v2.3.0
    
         with:
           version: 24.2.0                                      # On-prem customers should specify a client version that matches their ScanCentral environment
@@ -83,7 +83,7 @@ jobs:
           SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
           APPLICATION: "Github"
           VERSION: "1"
-          BUILD_OPTS: "-bt none"
+          # BUILD_OPTS: "-bt none"
 
       ### Archive ScanCentral Client logs on failure ###
       - name: Save ScanCentral Logs
