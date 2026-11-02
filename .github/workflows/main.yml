@@ -83,7 +83,13 @@ jobs:
       #   For other build tools, add your build commands to the workflow to download necessary dependencies and prepare according to Fortify SCA documentation.
       - name: Perform SAST Scan
         if: steps.changed-files.outputs.any_changed == 'true'
-        
+        shell: powershell
+
+        env:
+          SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
+          SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
+          APPLICATION: "Github"
+          VERSION: "1"
         run: |
           Write-Output "Preparing changed files for ScanCentral..."
 
@@ -123,15 +129,7 @@ jobs:
 
             & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "Github" --application-version "1" -uptoken "$env:SSC_UPLOAD_TOKEN" @includeArgs
 
-            env:                                            
-              SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
-              SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
-              APPLICATION: "Github"
-              VERSION: "1"
-
-
-
-            if ($LASTEXITCODE -ne 0) {
+          if ($LASTEXITCODE -ne 0) {
               throw "ScanCentral failed with exit code $LASTEXITCODE"
             }
 
