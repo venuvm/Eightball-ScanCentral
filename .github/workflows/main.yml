@@ -83,7 +83,7 @@ jobs:
       #   For other build tools, add your build commands to the workflow to download necessary dependencies and prepare according to Fortify SCA documentation.
       - name: Perform SAST Scan
         if: steps.changed-files.outputs.any_changed == 'true'
-        shell: pwsh
+        
         run: |
           Write-Output "The following files changed:"
 
