@@ -83,6 +83,7 @@ jobs:
       #   For other build tools, add your build commands to the workflow to download necessary dependencies and prepare according to Fortify SCA documentation.
       - name: Perform SAST Scan
         run: |
+          Write-Output "Including changed file 3333333: $includeArgs"
           if ($includeArgs.Count -gt 0) {
               & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "$env:APPLICATION" --application-version "$env:VERSION" -uptoken "$env:SSC_UPLOAD_TOKEN"  @includeArgs  
               }
