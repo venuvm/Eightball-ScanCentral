@@ -48,7 +48,13 @@ jobs:
           Write-Output "The following files changed:"
           $files = "${{ steps.changed-files.outputs.all_changed_files }}" -split " "
           foreach ($file in $files) {
-              Write-Output $file
+              # Write-Output $file
+              if (-not [string]::IsNullOrWhiteSpace($file)) {
+              Write-Output "Including changed file: $file"
+
+              $includeArgs += "-include"
+            $includeArgs += "./$file"
+          }
           }
 
         
