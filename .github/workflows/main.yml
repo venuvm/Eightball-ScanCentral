@@ -88,9 +88,9 @@ jobs:
           Write-Output "Preparing changed files for ScanCentral..."
 
           # Verify Controller URL is available
-          if ([string]::IsNullOrWhiteSpace(${{ secrets.SC_CONTROLLER_URL }})) {
+          
             $env:SC_CONTROLLER_URL = "https://fortify.cyberxdemo.com:10443/scancentral-ctrl"
-          }
+          
 
           Write-Output "ScanCentral Controller URL: $env:SC_CONTROLLER_URL"
 
@@ -121,8 +121,7 @@ jobs:
 
             Write-Output "Starting ONE ScanCentral scan for all changed files..."
 
-            & scancentral `
-              -url "$env:SC_CONTROLLER_URL" start -upload --application "$env:APPLICATION" --application-version "$env:VERSION" -uptoken "$env:SSC_UPLOAD_TOKEN" @includeArgs
+            & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "$env:APPLICATION" --application-version "$env:VERSION" -uptoken "$env:SSC_UPLOAD_TOKEN" @includeArgs
 
             if ($LASTEXITCODE -ne 0) {
               throw "ScanCentral failed with exit code $LASTEXITCODE"
