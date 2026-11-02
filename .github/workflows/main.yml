@@ -123,11 +123,11 @@ jobs:
 
             & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "Github" --application-version "1" -uptoken "$env:SSC_UPLOAD_TOKEN" @includeArgs
 
-          env:                                            
-            SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
-            SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
-            APPLICATION: "Github"
-            VERSION: "1"
+            env:                                            
+              SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
+              SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
+              APPLICATION: "Github"
+              VERSION: "1"
 
 
 
