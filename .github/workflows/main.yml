@@ -88,8 +88,8 @@ jobs:
           Write-Output "Preparing changed files for ScanCentral..."
 
           # Verify Controller URL is available
-          if ([string]::IsNullOrWhiteSpace($env:SC_CONTROLLER_URL)) {
-            throw "SC_CONTROLLER_URL is not configured."
+          if ([string]::IsNullOrWhiteSpace(${{ secrets.SC_CONTROLLER_URL }})) {
+            $env:SC_CONTROLLER_URL = "https://fortify.cyberxdemo.com:10443/scancentral-ctrl"
           }
 
           Write-Output "ScanCentral Controller URL: $env:SC_CONTROLLER_URL"
