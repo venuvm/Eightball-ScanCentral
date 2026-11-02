@@ -55,6 +55,7 @@ jobs:
               $includeArgs += "-include"
             $includeArgs += "./$file"
           }
+          Write-Output "Including changed file 22222: $includeArgs"
           }
 
         
