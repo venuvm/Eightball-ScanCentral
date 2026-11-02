@@ -106,7 +106,7 @@ jobs:
           if ($includeArgs.Count -gt 0) {
             Write-Output "Starting ONE ScanCentral scan for all changed files..."
       
-            & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "$env:APPLICATION" --application-version "$env:VERSION" -uptoken "$env:SSC_UPLOAD_TOKEN" @includeArgs
+            & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "$env:APPLICATION" --application-version "$env:VERSION" -uptoken "$env:SSC_UPLOAD_TOKEN" $includeArgs
           }
           else {
             Write-Output "No changed files found. ScanCentral scan skipped."
