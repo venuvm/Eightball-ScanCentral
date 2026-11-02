@@ -80,8 +80,8 @@ jobs:
         env:                                            
           SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
           SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
-          APPLICATION: "GITHUB-SELFHOSTED-SC"
-          VERSION: "1.0"
+          APPLICATION: "Github"
+          VERSION: "1"
           BUILD_OPTS: "-bt none"
 
       ### Archive ScanCentral Client logs on failure ###
