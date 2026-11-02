@@ -82,26 +82,35 @@ jobs:
       #   ScanCentral Client will download dependencies for maven, gradle and msbuild projects.
       #   For other build tools, add your build commands to the workflow to download necessary dependencies and prepare according to Fortify SCA documentation.
       - name: Perform SAST Scan
+        if: steps.changed-files.outputs.any_changed == 'true'
+        shell: pwsh
         run: |
-          Write-Output "Including changed file 3333333: $includeArgs"
-          if ($includeArgs.Count -gt 0) {
-              & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "$env:APPLICATION" --application-version "$env:VERSION" -uptoken "$env:SSC_UPLOAD_TOKEN"  @includeArgs  
-              }
-          else {
-              Write-Output "No changed files found. ScanCentral scan skipped."
-               }
-          
-        
-        # scancentral -url ${SC_CONTROLLER_URL} start -upload --application $APPLICATION --application-version $VERSION -b "eightball" -uptoken $SSC_UPLOAD_TOKEN -scan
-        
-        # scancentral -url ${SC_CONTROLLER_URL} start $BUILD_OPTS -upload -application $APPLICATION -version $VERSION -uptoken $SSC_UPLOAD_TOKEN
-        env:                                            
-          SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
-          SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
-          APPLICATION: "Github"
-          VERSION: "1"
-          # BUILD_OPTS: "-bt none"
+          Write-Output "The following files changed:"
 
+          $files = "${{ steps.changed-files.outputs.all_changed_files }}" -split " "
+          $includeArgs = @()
+
+          foreach ($file in $files) {
+          if (-not [string]::IsNullOrWhiteSpace($file)) {
+            Write-Output "Including changed file: $file"
+
+            $includeArgs += "-include"
+            $includeArgs += "./$file"
+          }
+          }
+
+          Write-Output "Number of changed files: $($includeArgs.Count / 2)"
+          Write-Output "ScanCentral include arguments:"
+          Write-Output ($includeArgs -join " ")
+
+          if ($includeArgs.Count -gt 0) {
+            Write-Output "Starting ONE ScanCentral scan for all changed files..."
+      
+            & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "$env:APPLICATION" --application-version "$env:VERSION" -uptoken "$env:SSC_UPLOAD_TOKEN" @includeArgs
+          }
+          else {
+            Write-Output "No changed files found. ScanCentral scan skipped."
+          }
       ### Archive ScanCentral Client logs on failure ###
       - name: Save ScanCentral Logs
         uses: actions/upload-artifact@v4                
