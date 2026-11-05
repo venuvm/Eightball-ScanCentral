@@ -130,7 +130,7 @@ jobs:
 
             Write-Output "Starting ONE ScanCentral scan for all changed files..."
 
-            & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "Github" --application-version "1" -uptoken "$env:SSC_UPLOAD_TOKEN"
+            & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "Github" --application-version "1" -uptoken "$env:SSC_UPLOAD_TOKEN" -b "EB" -scan -scan-precision 1
 
           if ($LASTEXITCODE -ne 0) {
               throw "ScanCentral failed with exit code $LASTEXITCODE"
