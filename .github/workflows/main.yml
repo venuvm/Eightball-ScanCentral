@@ -84,67 +84,245 @@ jobs:
       # Update BUILD_OPTS based on the ScanCentral Client documentation and your project's included tech stack(s).
       #   ScanCentral Client will download dependencies for maven, gradle and msbuild projects.
       #   For other build tools, add your build commands to the workflow to download necessary dependencies and prepare according to Fortify SCA documentation.
-      - name: Perform SAST Scan
+      - name: Stage full project and run Fortify ScanCentral SAST
         if: steps.changed-files.outputs.any_changed == 'true'
         shell: powershell
-
         env:
-          SC_CONTROLLER_URL: ${{ secrets.SC_CONTROLLER_URL }}
-          SSC_UPLOAD_TOKEN: ${{ secrets.SSC_UPLOAD_TOKEN }}
-          APPLICATION: "Github"
-          VERSION: "1"
+          SSC_URL: ${{ secrets.SSC_URL }}
+          SSC_CI_TOKEN: ${{ secrets.SSC_CI_TOKEN }}
+          SC_SAST_TOKEN: ${{ secrets.SC_SAST_TOKEN }}
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+      
         run: |
-          Write-Output "Preparing changed files for ScanCentral..."
-
-          # Verify Controller URL is available
-          
-            $env:SC_CONTROLLER_URL = "https://fortify.cyberxdemo.com:10443/scancentral-ctrl"
-          
-
-          Write-Output "ScanCentral Controller URL: $env:SC_CONTROLLER_URL"
-
-          # Get changed files
-          $files = "${{ steps.changed-files.outputs.all_changed_files }}" -split " "
-
-          $includeArgs = @()
-
-          foreach ($file in $files) {
-
-            if (-not [string]::IsNullOrWhiteSpace($file)) {
-
-              # Normalize Windows-style paths for ScanCentral
-              $normalizedFile = $file -replace '\\', '/'
-
-              Write-Output "Including changed file: $normalizedFile"
-
-              $includeArgs += "-include"
-              $includeArgs += "./$normalizedFile"
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+      
+          $workspace   = $env:GITHUB_WORKSPACE
+          $stagingDir = Join-Path $env:RUNNER_TEMP "fortify-full-project"
+          $packageFile = Join-Path $env:RUNNER_TEMP "package.zip"
+      
+          # ---------------------------------------------------------
+          # 1. Display files that triggered the scan
+          # ---------------------------------------------------------
+          $changedFiles = @(
+            $env:CHANGED_FILES -split '\|' |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          )
+      
+          Write-Host "Files that triggered the Fortify scan:"
+      
+          foreach ($file in $changedFiles) {
+            Write-Host "  $file"
+          }
+      
+          if ($changedFiles.Count -eq 0) {
+            Write-Host "No relevant changed files were found."
+            exit 0
+          }
+      
+          # ---------------------------------------------------------
+          # 2. Recreate staging directory
+          # ---------------------------------------------------------
+          if (Test-Path -LiteralPath $stagingDir) {
+            Remove-Item -LiteralPath $stagingDir -Recurse -Force
+          }
+      
+          New-Item `
+            -ItemType Directory `
+            -Path $stagingDir `
+            -Force | Out-Null
+      
+          # ---------------------------------------------------------
+          # 3. Stage the COMPLETE repository
+          #
+          # Compiled projects need unchanged source, build files,
+          # dependencies, project references, and configuration.
+          # ---------------------------------------------------------
+          Write-Host "Staging complete repository..."
+      
+          $robocopyArgs = @(
+            $workspace
+            $stagingDir
+            "/E"
+            "/R:2"
+            "/W:2"
+            "/XD"
+            ".git"
+            ".github"
+            ".vs"
+            ".idea"
+            ".gradle"
+            "node_modules"
+            "bin"
+            "obj"
+            "target"
+            "build"
+            "dist"
+            "coverage"
+            "/XF"
+            "package.zip"
+            "*.fpr"
+            "*.log"
+          )
+      
+          & robocopy @robocopyArgs
+      
+          $robocopyExitCode = $LASTEXITCODE
+      
+          # Robocopy exit codes 0 through 7 indicate success.
+          if ($robocopyExitCode -ge 8) {
+            throw "Repository staging failed. Robocopy exit code: $robocopyExitCode"
+          }
+      
+          Write-Host "Complete repository staged successfully."
+      
+          # ---------------------------------------------------------
+          # 4. Detect the primary build system
+          # ---------------------------------------------------------
+          Push-Location $stagingDir
+      
+          try {
+            $packageArgs = @(
+              "package"
+              "-o"
+              $packageFile
+            )
+      
+            $solution = Get-ChildItem `
+              -Path $stagingDir `
+              -Filter "*.sln" `
+              -File `
+              -Recurse |
+              Select-Object -First 1
+      
+            $mavenFile = Get-ChildItem `
+              -Path $stagingDir `
+              -Filter "pom.xml" `
+              -File `
+              -Recurse |
+              Select-Object -First 1
+      
+            $gradleFile = Get-ChildItem `
+              -Path $stagingDir `
+              -Include "build.gradle", "build.gradle.kts" `
+              -File `
+              -Recurse |
+              Select-Object -First 1
+      
+            if ($solution) {
+              $relativeBuildFile = [System.IO.Path]::GetRelativePath(
+                $stagingDir,
+                $solution.FullName
+              )
+      
+              Write-Host "Detected MSBuild solution: $relativeBuildFile"
+      
+              $packageArgs += @(
+                "-bt"
+                "msbuild"
+                "-bf"
+                $relativeBuildFile
+              )
+            }
+            elseif ($mavenFile) {
+              $relativeBuildFile = [System.IO.Path]::GetRelativePath(
+                $stagingDir,
+                $mavenFile.FullName
+              )
+      
+              Write-Host "Detected Maven project: $relativeBuildFile"
+      
+              $packageArgs += @(
+                "-bt"
+                "mvn"
+                "-bf"
+                $relativeBuildFile
+              )
+            }
+            elseif ($gradleFile) {
+              $relativeBuildFile = [System.IO.Path]::GetRelativePath(
+                $stagingDir,
+                $gradleFile.FullName
+              )
+      
+              Write-Host "Detected Gradle project: $relativeBuildFile"
+      
+              $packageArgs += @(
+                "-bt"
+                "gradle"
+                "-bf"
+                $relativeBuildFile
+              )
+            }
+            else {
+              Write-Host "No Maven, Gradle, or MSBuild root detected."
+              Write-Host "ScanCentral will package the source using automatic detection."
+            }
+      
+            # -------------------------------------------------------
+            # 5. Create one ScanCentral package
+            # -------------------------------------------------------
+           -Path -LiteralPath $packageFile) {
+              Remove-Item -LiteralPath $packageFile -Force
+            }
+      
+            Write-Host "Creating ScanCentral package..."
+            Write-Host "scancentral $($packageArgs -join ' ')"
+      
+            & scancentral @packageArgs
+      
+            if ($LASTEXITCODE -ne 0) {
+              throw "ScanCentral package failed with exit code $LASTEXITCODE."
             }
           }
-
-          Write-Output "Number of changed files: $($includeArgs.Count / 2)"
-          Write-Output "ScanCentral include arguments:"
-          Write-Output ($includeArgs -join " ")
-
-          if ($includeArgs.Count -gt 0) {
-
-            Write-Output "Starting ONE ScanCentral scan for all changed files..."
-
-            & scancentral -url "$env:SC_CONTROLLER_URL" start -upload --application "Github" --application-version "1" -uptoken "$env:SSC_UPLOAD_TOKEN"
-
+          finally {
+            Pop-Location
+          }
+      
+          if (-not (Test-Path -LiteralPath $packageFile -PathType Leaf)) {
+            throw "ScanCentral packaging failed: package.zip was not created."
+          }
+      
+          $packageSizeMB = :Round(
+            (Get-Item -LiteralPath $packageFile).Length / 1MB,
+            2
+          )
+      
+          Write-Host "Package created: $packageFile"
+          Write-Host "Package size: $packageSizeMB MB"
+      
+          # ---------------------------------------------------------
+          # 6. Authenticate to SSC and ScanCentral SAST
+          # ---------------------------------------------------------
+          Write-Host "Creating SSC and ScanCentral SAST session..."
+      
+          & fcli ssc session login `
+            --url "$env:SSC_URL" `
+            --ci-token "$env:SSC_CI_TOKEN" `
+            -c "$env:SC_SAST_TOKEN"
+      
           if ($LASTEXITCODE -ne 0) {
-              throw "ScanCentral failed with exit code $LASTEXITCODE"
-            }
-
+            throw "fcli session login failed with exit code $LASTEXITCODE."
           }
-          else {
+      
+          # ---------------------------------------------------------
+          # 7. Submit one ScanCentral SAST scan
+          # ---------------------------------------------------------
+          Write-Host "Submitting one complete ScanCentral SAST scan..."
+      
+          & fcli sc-sast scan start `
+            --file="$packageFile" `
+            --publish-to "fcli:1" `
+            --publish-token "$env:SSC_CI_TOKEN"
+      
+          if ($LASTEXITCODE -ne 0) {
+            throw "ScanCentral SAST submission failed with exit code $LASTEXITCODE."
+          } 
 
-            Write-Output "No changed files found. ScanCentral scan skipped."
-
-          }
 
 
-          
+    
       ### Archive ScanCentral Client logs on failure ###
       - name: Save ScanCentral Logs
         uses: actions/upload-artifact@v4                
