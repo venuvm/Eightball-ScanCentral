@@ -325,10 +325,17 @@ jobs:
               throw "ScanCentral package was not created: $packageFile"
           }
       
-          $packageInfofo = Get-Item -LiteralPath $packageFile
-          $packageSizeMB = [math\]::Round(
+          $packageInfo = Get-Item -LiteralPath $packageFile
+
+          $packageSizeMB = [Math]::Round(
               $packageInfo.Length / 1MB,
               2
+          )
+          
+          Write-Host ""
+          Write-Host "Package successfully created."
+          Write-Host "Package: $packageFile"
+          Write-Host "Package size: $packageSizeMB MB"
           )
       
           Write-Host ""
