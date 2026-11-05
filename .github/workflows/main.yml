@@ -95,232 +95,297 @@ jobs:
       
         run: |
           $ErrorActionPreference = "Stop"
-          Set-StrictMode -Version Latest
       
-          $workspace   = $env:GITHUB_WORKSPACE
+          $workspace = $env:GITHUB_WORKSPACE
           $stagingDir = Join-Path $env:RUNNER_TEMP "fortify-full-project"
           $packageFile = Join-Path $env:RUNNER_TEMP "package.zip"
       
           # ---------------------------------------------------------
-          # 1. Display files that triggered the scan
+          # 1. Process changed files
           # ---------------------------------------------------------
+      
+          Write-Host "Changed files that triggered this workflow:"
+          Write-Host $env:CHANGED_FILES
+      
+          if ([string]::IsNullOrWhiteSpace($env:CHANGED_FILES)) {
+              Write-Host "No changed files. Skipping Fortify scan."
+              exit 0
+          }
+      
           $changedFiles = @(
-            $env:CHANGED_FILES -split '\|' |
+              $env:CHANGED_FILES -split '\|' |
               ForEach-Object { $_.Trim() } |
               Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
           )
       
-          Write-Host "Files that triggered the Fortify scan:"
+          Write-Host ""
+          Write-Host "Changed files:"
       
           foreach ($file in $changedFiles) {
-            Write-Host "  $file"
-          }
-      
-          if ($changedFiles.Count -eq 0) {
-            Write-Host "No relevant changed files were found."
-            exit 0
+              Write-Host "  $file"
           }
       
           # ---------------------------------------------------------
-          # 2. Recreate staging directory
+          # 2. Prepare clean staging directory
           # ---------------------------------------------------------
+      
+          Write-Host ""
+          Write-Host "Preparing staging directory:"
+          Write-Host $stagingDir
+      
           if (Test-Path -LiteralPath $stagingDir) {
-            Remove-Item -LiteralPath $stagingDir -Recurse -Force
+              Remove-Item -LiteralPath $stagingDir -Recurse -Force
           }
       
           New-Item `
-            -ItemType Directory `
-            -Path $stagingDir `
-            -Force | Out-Null
+              -ItemType Directory `
+              -Path $stagingDir `
+              -Force | Out-Null
       
           # ---------------------------------------------------------
-          # 3. Stage the COMPLETE repository
+          # 3. Copy FULL source tree
           #
-          # Compiled projects need unchanged source, build files,
-          # dependencies, project references, and configuration.
+          # Important for Java/.NET/C/C++:
+          # We copy the complete project, NOT only changed files.
           # ---------------------------------------------------------
-          Write-Host "Staging complete repository..."
+      
+          Write-Host ""
+          Write-Host "Copying complete project for compiled-language analysis..."
       
           $robocopyArgs = @(
-            $workspace
-            $stagingDir
-            "/E"
-            "/R:2"
-            "/W:2"
-            "/XD"
-            ".git"
-            ".github"
-            ".vs"
-            ".idea"
-            ".gradle"
-            "node_modules"
-            "bin"
-            "obj"
-            "target"
-            "build"
-            "dist"
-            "coverage"
-            "/XF"
-            "package.zip"
-            "*.fpr"
-            "*.log"
+              $workspace
+              $stagingDir
+              "/E"
+              "/R:2"
+              "/W:2"
+              "/XD"
+              ".git"
+              ".vs"
+              ".idea"
+              ".gradle"
+              "node_modules"
+              "bin"
+              "obj"
+              "target"
+              "build"
+              "dist"
+              "coverage"
+              "/XF"
+              "package.zip"
+              "*.fpr"
+              "*.log"
           )
       
           & robocopy @robocopyArgs
       
           $robocopyExitCode = $LASTEXITCODE
       
-          # Robocopy exit codes 0 through 7 indicate success.
+          Write-Host "Robocopy exit code: $robocopyExitCode"
+      
+          # Robocopy 0-7 = success/nonfatal
+          # Robocopy >=8 = failure
           if ($robocopyExitCode -ge 8) {
-            throw "Repository staging failed. Robocopy exit code: $robocopyExitCode"
+              throw "Repository staging failed. Robocopy exit code: $robocopyExitCode"
           }
       
-          Write-Host "Complete repository staged successfully."
+          Write-Host "Full repository staging completed."
       
           # ---------------------------------------------------------
-          # 4. Detect the primary build system
+          # 4. Remove previous package
           # ---------------------------------------------------------
-          Push-Location $stagingDir
       
-          try {
-            $packageArgs = @(
-              "package"
-              "-o"
-              $packageFile
-            )
+          if (Test-Path -LiteralPath $packageFile) {
+              Remove-Item -LiteralPath $packageFile -Force
+          }
       
-            $solution = Get-ChildItem `
-              -Path $stagingDir `
-              -Filter "*.sln" `
-              -File `
-              -Recurse |
-              Select-Object -First 1
+          # ---------------------------------------------------------
+          # 5. Detect build system
+          # ---------------------------------------------------------
       
-            $mavenFile = Get-ChildItem `
+          $mavenFile = Get-ChildItem `
               -Path $stagingDir `
               -Filter "pom.xml" `
               -File `
               -Recurse |
               Select-Object -First 1
       
-            $gradleFile = Get-ChildItem `
+          $gradleFile = Get-ChildItem `
               -Path $stagingDir `
-              -Include "build.gradle", "build.gradle.kts" `
+              -File `
+              -Recurse |
+              Where-Object {
+                  $_.Name -eq "build.gradle" -or
+                  $_.Name -eq "build.gradle.kts"
+              } |
+              Select-Object -First 1
+      
+          $solution = Get-ChildItem `
+              -Path $stagingDir `
+              -Filter "*.sln" `
               -File `
               -Recurse |
               Select-Object -First 1
       
-            if ($solution) {
-              $relativeBuildFile = [System.IO.Path]::GetRelativePath(
-                $stagingDir,
-                $solution.FullName
-              )
+          Write-Host ""
+          Write-Host "Build system detection:"
       
-              Write-Host "Detected MSBuild solution: $relativeBuildFile"
+          if ($mavenFile) {
+              Write-Host "Maven project detected:"
+              Write-Host $mavenFile.FullName
+          }
+          elseif ($gradleFile) {
+              Write-Host "Gradle project detected:"
+              Write-Host $gradleFile.FullName
+          }
+          elseif ($solution) {
+              Write-Host "MSBuild project detected:"
+              Write-Host $solution.FullName
+          }
+          else {
+              Write-Host "No Maven, Gradle or MSBuild project detected."
+              Write-Host "ScanCentral automatic project detection will be used."
+          }
       
-              $packageArgs += @(
-                "-bt"
-                "msbuild"
-                "-bf"
-                $relativeBuildFile
-              )
-            }
-            elseif ($mavenFile) {
-              $relativeBuildFile = [System.IO.Path]::GetRelativePath(
-                $stagingDir,
-                $mavenFile.FullName
-              )
+          # ---------------------------------------------------------
+          # 6. Package complete project
+          # ---------------------------------------------------------
       
-              Write-Host "Detected Maven project: $relativeBuildFile"
+          Push-Location $stagingDir
       
-              $packageArgs += @(
-                "-bt"
-                "mvn"
-                "-bf"
-                $relativeBuildFile
-              )
-            }
-            elseif ($gradleFile) {
-              $relativeBuildFile = [System.IO.Path]::GetRelativePath(
-                $stagingDir,
-                $gradleFile.FullName
-              )
+          try {
       
-              Write-Host "Detected Gradle project: $relativeBuildFile"
+              Write-Host ""
+              Write-Host "Creating ScanCentral package..."
       
-              $packageArgs += @(
-                "-bt"
-                "gradle"
-                "-bf"
-                $relativeBuildFile
-              )
-            }
-            else {
-              Write-Host "No Maven, Gradle, or MSBuild root detected."
-              Write-Host "ScanCentral will package the source using automatic detection."
-            }
+              if ($mavenFile) {
       
-            # -------------------------------------------------------
-            # 5. Create one ScanCentral package
-            # -------------------------------------------------------
-           -Path -LiteralPath $packageFile) {
-              Remove-Item -LiteralPath $packageFile -Force
-            }
+                  $relativeBuildFile = $mavenFile.FullName.Substring(
+                      $stagingDir.Length
+                  ).TrimStart('\')
       
-            Write-Host "Creating ScanCentral package..."
-            Write-Host "scancentral $($packageArgs -join ' ')"
+                  Write-Host "Build tool: Maven"
+                  Write-Host "Build file: $relativeBuildFile"
       
-            & scancentral @packageArgs
+                  & scancentral package `
+                      -bt mvn `
+                      -bf "$relativeBuildFile" `
+                      -o "$packageFile"
+              }
+              elseif ($gradleFile) {
       
-            if ($LASTEXITCODE -ne 0) {
-              throw "ScanCentral package failed with exit code $LASTEXITCODE."
-            }
+                  $relativeBuildFile = $gradleFile.FullName.Substring(
+                      $stagingDir.Length
+                  ).TrimStart('\')
+      
+                  Write-Host "Build tool: Gradle"
+                  Write-Host "Build file: $relativeBuildFile"
+      
+                  & scancentral package `
+                      -bt gradle `
+                      -bf "$relativeBuildFile" `
+                      -o "$packageFile"
+              }
+              elseif ($solution) {
+      
+                  $relativeBuildFile = $solution.FullName.Substring(
+                      $stagingDir.Length
+                  ).TrimStart('\')
+      
+                  Write-Host "Build tool: MSBuild"
+                  Write-Host "Build file: $relativeBuildFile"
+      
+                  & scancentral package `
+                      -bt msbuild `
+                      -bf "$relativeBuildFile" `
+                      -o "$packageFile"
+              }
+              else {
+      
+                  Write-Host "Using ScanCentral automatic detection."
+      
+                  & scancentral package `
+                      -o "$packageFile"
+              }
+      
+              $packageExitCode = $LASTEXITCODE
+      
+              if ($packageExitCode -ne 0) {
+                  throw "ScanCentral package failed. Exit code: $packageExitCode"
+              }
           }
           finally {
-            Pop-Location
+              Pop-Location
           }
       
-          if (-not (Test-Path -LiteralPath $packageFile -PathType Leaf)) {
-            throw "ScanCentral packaging failed: package.zip was not created."
+          # ---------------------------------------------------------
+          # 7. Validate package
+          # ---------------------------------------------------------
+      
+          if (-not (Test-Path -LiteralPath $packageFile)) {
+              throw "ScanCentral package was not created: $packageFile"
           }
       
-          $packageSizeMB = :Round(
-            (Get-Item -LiteralPath $packageFile).Length / 1MB,
-            2
+          $packageInfofo = Get-Item -LiteralPath $packageFile
+          $packageSizeMB = [math\]::Round(
+              $packageInfo.Length / 1MB,
+              2
           )
       
-          Write-Host "Package created: $packageFile"
-          Write-Host "Package size: $packageSizeMB MB"
+          Write-Host ""
+          Write-Host "Package successfully created."
+          Write-Host "Package: $packageFile"
+          Write-Host "Size: $packageSizeMB MB"
       
+          # ------------------------------------------ck credentials
           # ---------------------------------------------------------
-          # 6. Authenticate to SSC and ScanCentral SAST
-          # ---------------------------------------------------------
-          Write-Host "Creating SSC and ScanCentral SAST session..."
       
-          & fcli ssc session login `
-            --url "$env:SSC_URL" `
-            --ci-token "$env:SSC_CI_TOKEN" `
-            -c "$env:SC_SAST_TOKEN"
+          if (:IsNullOrWhiteSpace($env:SSC_URL)) {
+              throw "SSC_URL is empty."
+          }
       
-          if ($LASTEXITCODE -ne 0) {
-            throw "fcli session login failed with exit code $LASTEXITCODE."
+          if (:IsNullOrWhiteSpace($env:SSC_CI_TOKEN)) {
+              throw "SSC_CI_TOKEN is empty."
+          }
+      
+          if (:IsNullOrWhiteSpace($env:SC_SAST_TOKEN)) {
+              throw "SC_SAST_TOKEN is empty."
           }
       
           # ---------------------------------------------------------
-          # 7. Submit one ScanCentral SAST scan
+          # 9. Login to SSC / ScanCentral
           # ---------------------------------------------------------
-          Write-Host "Submitting one complete ScanCentral SAST scan..."
       
-          & fcli sc-sast scan start `
-            --file="$packageFile" `
-            --publish-to "fcli:1" `
-            --publish-token "$env:SSC_CI_TOKEN"
+          Write-Host ""
+          Write-Host "Logging in to SSC and configuring ScanCentral authentication..."
+      
+          & fcli ssc session login `
+              --url "$env:SSC_URL" `
+              --ci-token "$env:SSC_CI_TOKEN" `
+              -c "$env:SC_SAST_TOKEN"
       
           if ($LASTEXITCODE -ne 0) {
-            throw "ScanCentral SAST submission failed with exit code $LASTEXITCODE."
-          } 
-
-
+              throw "fcli SSC session login failed. Exit code: $LASTEXITCODE"
+          }
+      
+          # ---------------------------------------------------------
+          # 10. Submit ONE ScanCentral SAST job
+          # ---------------------------------------------------------
+      
+          Write-Host ""
+          Write-Host "Submitting ScanCentral SAST scan..."
+      
+          & fcli sc-sast scan start `
+              --file="$packageFile" `
+              --publish-to "fcli:1" `
+              --publish-token "$env:SSC_CI_TOKEN"
+      
+          if ($LASTEXITCODE -ne 0) {
+              throw "ScanCentral scan submission failed. Exit code: $LASTEXITCODE"
+          }
+      
+          Write-Host ""
+          Write-Host "ScanCentral SAST scan submitted successfully."
+      
 
     
       ### Archive ScanCentral Client logs on failure ###
