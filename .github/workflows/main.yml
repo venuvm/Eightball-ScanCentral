@@ -316,17 +316,16 @@ jobs:
           finally {
               Pop-Location
           }
-      
-          # ---------------------------------------------------------
+                # ---------------------------------------------------------
           # 7. Validate package
           # ---------------------------------------------------------
-      
+          
           if (-not (Test-Path -LiteralPath $packageFile)) {
               throw "ScanCentral package was not created: $packageFile"
           }
-      
+          
           $packageInfo = Get-Item -LiteralPath $packageFile
-
+          
           $packageSizeMB = [Math]::Round(
               $packageInfo.Length / 1MB,
               2
@@ -336,63 +335,57 @@ jobs:
           Write-Host "Package successfully created."
           Write-Host "Package: $packageFile"
           Write-Host "Package size: $packageSizeMB MB"
-          )
-      
-          Write-Host ""
-          Write-Host "Package successfully created."
-          Write-Host "Package: $packageFile"
-          Write-Host "Size: $packageSizeMB MB"
-      
-          # ------------------------------------------ck credentials
+          
           # ---------------------------------------------------------
-      
-          if (:IsNullOrWhiteSpace($env:SSC_URL)) {
+          # 8. Check credentials
+          # ---------------------------------------------------------
+          
+          if ([string]::IsNullOrWhiteSpace($env:SSC_URL)) {
               throw "SSC_URL is empty."
           }
-      
-          if (:IsNullOrWhiteSpace($env:SSC_CI_TOKEN)) {
+          
+          if ([string]::IsNullOrWhiteSpace($env:SSC_CI_TOKEN)) {
               throw "SSC_CI_TOKEN is empty."
           }
-      
-          if (:IsNullOrWhiteSpace($env:SC_SAST_TOKEN)) {
+          
+          if ([string]::IsNullOrWhiteSpace($env:SC_SAST_TOKEN)) {
               throw "SC_SAST_TOKEN is empty."
           }
-      
+          
           # ---------------------------------------------------------
           # 9. Login to SSC / ScanCentral
           # ---------------------------------------------------------
-      
+          
           Write-Host ""
           Write-Host "Logging in to SSC and configuring ScanCentral authentication..."
-      
+          
           & fcli ssc session login `
               --url "$env:SSC_URL" `
               --ci-token "$env:SSC_CI_TOKEN" `
               -c "$env:SC_SAST_TOKEN"
-      
+          
           if ($LASTEXITCODE -ne 0) {
               throw "fcli SSC session login failed. Exit code: $LASTEXITCODE"
           }
-      
+          
           # ---------------------------------------------------------
           # 10. Submit ONE ScanCentral SAST job
           # ---------------------------------------------------------
-      
+          
           Write-Host ""
           Write-Host "Submitting ScanCentral SAST scan..."
-      
+          
           & fcli sc-sast scan start `
               --file="$packageFile" `
               --publish-to "fcli:1" `
               --publish-token "$env:SSC_CI_TOKEN"
-      
+          
           if ($LASTEXITCODE -ne 0) {
               throw "ScanCentral scan submission failed. Exit code: $LASTEXITCODE"
           }
-      
+          
           Write-Host ""
           Write-Host "ScanCentral SAST scan submitted successfully."
-      
 
     
       ### Archive ScanCentral Client logs on failure ###
