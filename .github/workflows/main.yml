@@ -378,13 +378,14 @@ jobs:
               --file="$packageFile" `
               --publish-to "fcli:1" `
               --publish-token "$env:SSC_CI_TOKEN" `
-              --sargs "-include **/*.java "
+              --sargs "-include $env:CHANGED_FILES "
           
           if ($LASTEXITCODE -ne 0) {
               throw "ScanCentral scan submission failed. Exit code: $LASTEXITCODE"
           }
           
           Write-Host ""
+          Write-Host "changed file list: $env:CHANGED_FILES"
           Write-Host "ScanCentral SAST scan submitted successfully."
 
     
