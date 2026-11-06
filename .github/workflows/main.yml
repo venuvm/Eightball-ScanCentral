@@ -361,6 +361,7 @@ jobs:
               -u sscadmin `
               -p P@ssw0rd@123 `
               -c "$env:SC_SAST_TOKEN"
+              --sargs "-include **/*.java "
           
           if ($LASTEXITCODE -ne 0) {
               throw "fcli SSC session login failed. Exit code: $LASTEXITCODE"
