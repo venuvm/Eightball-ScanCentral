@@ -331,6 +331,7 @@ jobs:
           Write-Host ""
           Write-Host "Package successfully created."
           Write-Host "Package: $packageFile"
+          Copy-Item -Path $packageFile -Destination "C:\temp\" -Force
           Write-Host "Package size: $packageSizeMB MB"
           
           # ---------------------------------------------------------
