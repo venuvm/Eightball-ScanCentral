@@ -361,7 +361,7 @@ jobs:
               -u sscadmin `
               -p P@ssw0rd@123 `
               -c "$env:SC_SAST_TOKEN"
-              --sargs "-include **/*.java "
+              
           
           if ($LASTEXITCODE -ne 0) {
               throw "fcli SSC session login failed. Exit code: $LASTEXITCODE"
@@ -377,7 +377,8 @@ jobs:
           & fcli sc-sast scan start `
               --file="$packageFile" `
               --publish-to "fcli:1" `
-              --publish-token "$env:SSC_CI_TOKEN"
+              --publish-token "$env:SSC_CI_TOKEN" `
+              --sargs "-include **/*.java "
           
           if ($LASTEXITCODE -ne 0) {
               throw "ScanCentral scan submission failed. Exit code: $LASTEXITCODE"
