@@ -52,8 +52,8 @@ jobs:
               if (-not [string]::IsNullOrWhiteSpace($file)) {
               Write-Output "Including changed file: $file"
 
-              $includeArgs += "-include"
-            $includeArgs += "./$file"
+              $includeArgs += "-include "
+            $includeArgs += " ./$file"
           }
           Write-Output "Including changed file 22222: $includeArgs"
           }
