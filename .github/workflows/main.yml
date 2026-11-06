@@ -358,7 +358,9 @@ jobs:
           
           & fcli ssc session login `
               --url "$env:SSC_URL" `
-              --ci-token "$env:SSC_CI_TOKEN" `
+              #--ci-token "$env:SSC_CI_TOKEN" `
+              -u "sscadmin"
+              -p "P@ssw0rd@123"
               -c "$env:SC_SAST_TOKEN"
           
           if ($LASTEXITCODE -ne 0) {
