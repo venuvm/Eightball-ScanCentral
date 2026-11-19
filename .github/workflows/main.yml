@@ -377,7 +377,7 @@ jobs:
           # ---------------------------------------------------------
           
           Write-Host ""
-          Write-Host "Submitting ScanCentral SAST scan..."
+          Write-Host "Submitting ScanCentral SAST scan...********* $env:CHANGED_FILES"
           
           & fcli sc-sast scan start `
               --file="$packageFile" `
