@@ -383,7 +383,7 @@ jobs:
               --file="$packageFile" `
               --publish-to "fcli:1" `
               --publish-token "$env:SSC_CI_TOKEN" `
-              --sargs "-include $env:CHANGED_FILES "
+              --sargs "-include C:\temp\package.zip\Src\fortify-full-project\EightBall.java "
           
           if ($LASTEXITCODE -ne 0) {
               throw "ScanCentral scan submission failed. Exit code: $LASTEXITCODE"
