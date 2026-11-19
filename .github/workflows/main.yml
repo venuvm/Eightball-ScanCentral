@@ -116,15 +116,15 @@ jobs:
 
         env:
 
-          SSC_URL: ${{ secrets.SSC_URL }}
+          SSC_URL: "https://fortify.cyberxdemo.com:8443/ssc"
 
-          SSC_USER: ${{ secrets.SSC_USER }}
+          SSC_USER: "sscadmin"
 
-          SSC_PASSWORD: ${{ secrets.SSC_PASSWORD }}
+          SSC_PASSWORD: "P@ssw0rd@123"
 
-          SSC_CI_TOKEN: ${{ secrets.SSC_CI_TOKEN }}
+          SSC_CI_TOKEN: "15de0770-2c7b-4831-95c6-d7e4f6e2da58"
 
-          SC_SAST_TOKEN: ${{ secrets.SC_SAST_TOKEN }}
+          SC_SAST_TOKEN: "CHANGEME321!"
 
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
 
