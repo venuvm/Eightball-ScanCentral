@@ -287,6 +287,7 @@ jobs:
 
           # ========================================================
           # 7. DISPLAY FINAL STAGING CONTENTS
+          # PowerShell 5.1 / .NET Framework compatible
           # ========================================================
           
           Write-Host ""
@@ -294,25 +295,16 @@ jobs:
           Write-Host " FINAL FILES GOING INTO PACKAGE"
           Write-Host "=============================================="
           
-          $stagingPrefix = $stagingDir.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
-          
           Get-ChildItem `
               -LiteralPath $stagingDir `
               -File `
               -Recurse |
               ForEach-Object {
           
-                  $fullPath = $_.FullName
-          
-                  if ($fullPath.StartsWith(
-                      $stagingPrefix,
-                      [System.StringComparison]::OrdinalIgnoreCase
-                  )) {
-                      $relativePath = $fullPath.Substring($stagingPrefix.Length)
-                  }
-                  else {
-                      $relativePath = $_.Name
-                  }
+                  $relativePath = $_.FullName.Replace(
+                      $stagingDir.TrimEnd('\') + '\',
+                      ''
+                  )
           
                   Write-Host "  $relativePath"
               }
