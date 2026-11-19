@@ -234,7 +234,7 @@ jobs:
               }
 
               $sourcePath = Join-Path $workspace $normalizedRelativeFile
-              th = Join-Path $stagingDir $normalizedRelativeFile
+              $destinationPath = Join-Path $stagingDir $normalizedRelativeFile
 
               # Deleted files can appear in the changed-file results but
               # no longer exist in the checked-out repository.
