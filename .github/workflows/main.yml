@@ -373,134 +373,167 @@ jobs:
           }
 
           # ========================================================
-          # 4. COPY ALL CHANGED FILES
-          # ========================================================
+            # 4. COPY ALL CHANGED FILES
+            # ========================================================
 
-          Write-Host ""
-          Write-Host "=============================================="
-          Write-Host " COPYING ALL CHANGED FILES"
-          Write-Host "=============================================="
+            Write-Host ""
+            Write-Host "=============================================="
+            Write-Host " COPYING ALL CHANGED FILES"
+            Write-Host "=============================================="
 
-          $copiedFiles = New-Object `
-              "System.Collections.Generic.List[string]"
+            # Use standard PowerShell arrays for maximum PS 5.1 compatibility
+            $copiedFiles = @()
+            $skippedFiles = @()
 
-              $skippedFilesric.List[string]"
+            foreach ($relativeFile in $changedFiles) {
 
-          foreach ($relativeFile in $changedFiles) {
-              $normalizedRelativeFile = $relativeFile.Replace(
-                  "/",
-                  [System.IO.Path]::DirectorySeparatorChar
-              )
+                if (:IsNullOrWhiteSpace($relativeFile)) {
+                    continue
+                }
 
-              if (
-                  [System.IO.Path]::IsPathRooted($normalizedRelativeFile) -or
-                  $normalizedRelativeFile -match '(^|[\\/])\.\.([\\/]|$)'
-              ) {
-                  Write-Warning "Skipping unsafe path: $relativeFile"
-                  $skippedFiles.Add($relativeFile)
-                  continue
-              }
+                $relativeFile = $relativeFile.Trim()
 
-              $sourcePath = Join-Path `
-                  $workspace `
-                  $normalizedRelativeFile
+                # Convert GitHub/Git path separators to Windows separators
+                $normalizedRelativeFile = $relativeFile.Replace(
+                    "/",
+                    "\"
+                )
 
-              $destinationPath = Join-Path `
-                  $stagingDir `
-                  $normalizedRelativeFile
+                # Reject absolute paths
+                if () {
+                    Write-Warning "Skipping absolute path: $relativeFile"
+                    $skippedFiles += $relativeFile
+                    continue
+                }
 
-              if (-not (
-                  Test-Path `
-                      -LiteralPath $sourcePath `
-                      -PathType Leaf
-              )) {
-                  Write-Warning "Skipping missing file: $relativeFile"
-                  $skippedFiles.Add($relativeFile)
-                  continue
-              }
+                # Reject directory traversal
+                if ($normalizedRelativeFile -match '(^|[\\])\.\.([\\]|$)') {
+                    Write-Warning "Skipping unsafe path: $relativeFile"
+                    $skippedFiles += $relativeFile
+                    continue
+                }
 
-              $destinationParent = Split-Path `
-                  -Path $destinationPath `
-                  -Parent
+                $sourcePath = Join-Path `
+                    $workspace `
+                    $normalizedRelativeFile
 
-              if (-not (
-                  Test-Path -LiteralPath $destinationParent
-              )) {
-                  New-Item `
-                      -ItemType Directory `
-                      -Path $destinationParent `
-                      -Force |
-                      Out-Null
-              }
+                $destinationPath = Join-Path `
+                    $stagingDir `
+                    $normalizedRelativeFile
 
-              Copy-Item `
-                  -LiteralPath $sourcePath `
-                  -Destination $destinationPath `
-                  -Force
+                Write-Host ""
+                Write-Host "Processing : $relativeFile"
+                Write-Host "Source     : $sourcePath"
+                Write-Host "Destination: $destinationPath"
 
-              $copiedFiles.Add($relativeFile)
+                # File must exist in current checkout
+                if (-not (
+                    Test-Path `
+                        -LiteralPath $sourcePath `
+                        -PathType Leaf
+                )) {
+                    Write-Warning "Skipping missing/deleted file: $relativeFile"
 
-              Write-Host "Included: $relativeFile"
-          }
+                    $skippedFiles += $relativeFile
 
-          # ========================================================
-          # 5. VERIFY COPIED FILES
-          # ========================================================
+                    continue
+                }
 
-          if ($copiedFiles.Count -eq 0) {
-              Write-Host ""
-                  Write-Host "No existing changed files are available to scan."
-              Write-Host "Skipping Fortify scan."
-              exit 0
-          }
+                $destinationParent = Split-Path `
+                    -Path $destinationPath `
+                    -Parent
 
-          Write-Host ""
-          Write-Host "Changed files detected        : $($changedFiles.Count)"
-          Write-Host "Changed files copied          : $($copiedFiles.Count)"
-          Write-Host "Missing/unsafe files skipped  : $($skippedFiles.Count)"
+                if (-not (
+                    Test-Path -LiteralPath $destinationParent
+                )) {
+                    New-Item `
+                        -ItemType Directory `
+                        -Path $destinationParent `
+                        -Force |
+                        Out-Null
+                }
 
-          # ========================================================
-          # 6. DISPLAY FINAL STAGING CONTENTS
-          # Compatible with Windows PowerShell 5.1
-          # ========================================================
+                Copy-Item `
+                    -LiteralPath $sourcePath `
+                    -Destination $destinationPath `
+                    -Force
 
-          Write-Host ""
-          Write-Host "=============================================="
-          Write-Host " FINAL FILES GOING INTO PACKAGE"
-          Write-Host "=============================================="
+                # Verify copy actually succeeded
+                if (-not (
+                    Test-Path `
+                        -LiteralPath $destinationPath `
+                        -PathType Leaf
+                )) {
+                    throw "File copy failed: $relativeFile"
+                }
 
-          $stagedFiles = @(
-              Get-ChildItem `
-                  -LiteralPath $stagingDir `
-                  -File `
-                  -Recurse
-          )
+                $copiedFiles += $relativeFile
 
-          foreach ($stagedFile in $stagedFiles) {
-              $stagingPrefix = $stagingDir.TrimEnd("\") + "\"
+                Write-Host "Included   : $relativeFile"
+            }
 
-              if ($stagedFile.FullName.StartsWith(
-                  $stagingPrefix,
-                  [System.StringComparison]::OrdinalIgnoreCase
-              )) {
-                  $displayPath = $stagedFile.FullName.Substring(
-                      $stagingPrefix.Length
-                  )
-              }
-              else {
-                  $displayPath = $stagedFile.FullName
-              }
+            # ========================================================
+            # 5. VERIFY COPIED FILES
+            # ========================================================
 
-              Write-Host "  $displayPath"
-          }
+            Write-Host ""
+            Write-Host "=============================================="
+            Write-Host " COPY SUMMARY"
+            Write-Host "=============================================="
 
-          Write-Host ""
-          Write-Host "Files in staging directory: $($stagedFiles.Count)"
+            Write-Host "Changed files detected : $($changedFiles.Count)"
+            Write-Host "Changed files copied   : $($copiedFiles.Count)"
+            Write-Host "Files skipped          : $($skippedFiles.Count)"
 
-          if ($stagedFiles.Count -ne $copiedFiles.Count) {
-              throw "Staging validation failed. Copied count is $($copiedFiles.Count), but staging contains $($stagedFiles.Count) files."
-          }
+            if ($copiedFiles.Count -eq 0) {
+                Write-Host ""
+                Write-Host "No existing changed files are available to scan."
+                Write-Host "Skipping Fortify scan."
 
+                exit 0
+            }
+
+            if ($skippedFiles.Count -gt 0) {
+
+                Write-Host ""
+                Write-Host "Skipped files:"
+
+                foreach ($file in $skippedFiles) {
+                    Write-Host "  $file"
+                }
+            }
+
+            # ========================================================
+            # 6. DISPLAY FINAL STAGING CONTENTS
+            # PowerShell 5.1 compatible
+            # ========================================================
+
+            Write-Host ""
+            Write-Host "=============================================="
+            Write-Host " FINAL FILES GOING INTO PACKAGE"
+            Write-Host "=============================================="
+
+            $stagedFiles = @(
+                Get-ChildItem `
+                    -LiteralPath $stagingDir `
+                    -File `
+                    -Recurse
+            )
+
+            foreach ($stagedFile in $stagedFiles) {
+
+                Write-Host "  $($stagedFile.FullName)"
+            }
+
+            Write-Host ""
+            Write-Host "Files copied     : $($copiedFiles.Count)"
+            Write-Host "Files in staging : $($stagedFiles.Count)"
+
+            if ($stagedFiles.Count -ne $copiedFiles.Count) {
+
+                throw "Staging validation failed. Copied $($copiedFiles.Count) files but staging contains $($stagedFiles.Count) files."
+
+            }
           # ========================================================
           # 7. CREATE SCANCENTRAL PACKAGE
           # ========================================================
