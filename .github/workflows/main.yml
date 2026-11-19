@@ -11,15 +11,14 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
 
 jobs:
-
   Fortify-SAST:
-
     runs-on: self-hosted
 
     steps:
-
       # ============================================================
       # 1. CHECKOUT SOURCE CODE
       # ============================================================
@@ -27,17 +26,7 @@ jobs:
       - name: Check Out Source Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
-
-
-      # For pull requests, checkout the actual PR head
-      # instead of the GitHub-generated merge commit.
-      - name: Checkout Pull Request Head
-        if: ${{ github.event_name == 'pull_request' }}
-        shell: powershell
-        run: |
-          git checkout HEAD^2
-
+          fetch-depth: 0
 
       # ============================================================
       # 2. IDENTIFY CHANGED FILES
@@ -47,9 +36,7 @@ jobs:
         id: changed-files
         uses: tj-actions/changed-files@v45
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           separator: "|"
-
 
       # ============================================================
       # 3. DISPLAY CHANGED FILES
@@ -60,8 +47,8 @@ jobs:
         shell: powershell
         env:
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
-
         run: |
+          $ErrorActionPreference = "Stop"
 
           Write-Host "=============================================="
           Write-Host " CHANGED FILES"
@@ -74,13 +61,13 @@ jobs:
               } |
               Where-Object {
                   -not [string]::IsNullOrWhiteSpace($_)
-              }
+              } |
+              Select-Object -Unique
           )
 
           foreach ($file in $changedFiles) {
               Write-Host "Changed: $file"
           }
-
 
       # ============================================================
       # 4. SETUP JAVA
@@ -90,8 +77,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
-
+          java-version: "17"
 
       # ============================================================
       # 5. SETUP FORTIFY SCANCENTRAL CLIENT
@@ -99,11 +85,9 @@ jobs:
 
       - name: Setup Fortify ScanCentral Client
         uses: fortify/gha-setup-scancentral-client@v2.3.0
-
         with:
-          version: 24.2.0
+          version: "24.2.0"
           client-auth-token: ${{ secrets.CLIENT_AUTH_TOKEN }}
-
 
       # ============================================================
       # 6. CREATE CHANGED-FILE PACKAGE AND SUBMIT SCAN
@@ -111,131 +95,103 @@ jobs:
 
       - name: Package Changed Files and Run Fortify ScanCentral SAST
         if: steps.changed-files.outputs.any_changed == 'true'
-
         shell: powershell
-
         env:
-
-          SSC_URL: "https://fortify.cyberxdemo.com:8443/ssc"
-
-          SSC_USER: "sscadmin"
-
-          SSC_PASSWORD: "P@ssw0rd@123"
-
-          SSC_CI_TOKEN: "15de0770-2c7b-4831-95c6-d7e4f6e2da58"
-
-          SC_SAST_TOKEN: "CHANGEME321!"
-
+          SSC_URL: ${{ secrets.SSC_URL }}
+          SSC_USER: ${{ secrets.SSC_USER }}
+          SSC_PASSWORD: ${{ secrets.SSC_PASSWORD }}
+          SSC_CI_TOKEN: ${{ secrets.SSC_CI_TOKEN }}
+          SC_SAST_TOKEN: ${{ secrets.SC_SAST_TOKEN }}
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
 
-
         run: |
-
           $ErrorActionPreference = "Stop"
-
 
           # ========================================================
           # CONFIGURATION
           # ========================================================
 
           $workspace = $env:GITHUB_WORKSPACE
-
-          $stagingDir = Join-Path `
-              $env:RUNNER_TEMP `
-              "fortify-changed-files"
-
-          $packageFile = Join-Path `
-              $env:RUNNER_TEMP `
-              "package.zip"
-
+          $stagingDir = Join-Path $env:RUNNER_TEMP "fortify-changed-files"
+          $packageFile = Join-Path $env:RUNNER_TEMP "package.zip"
+          $sscLoggedIn = $false
 
           Write-Host ""
           Write-Host "=============================================="
           Write-Host " FORTIFY CHANGED-FILE SCAN"
           Write-Host "=============================================="
-
           Write-Host "Workspace        : $workspace"
           Write-Host "Staging directory: $stagingDir"
           Write-Host "Package          : $packageFile"
-
           Write-Host ""
 
+          # ========================================================
+          # 1. VALIDATE REQUIRED COMMANDS
+          # ========================================================
+
+          if ($null -eq (Get-Command scancentral -ErrorAction SilentlyContinue)) {
+              throw "The scancentral command was not found in PATH."
+          }
+
+          if ($null -eq (Get-Command fcli -ErrorAction SilentlyContinue)) {
+              throw "The fcli command was not found in PATH. Install fcli on the self-hosted runner or add an fcli setup step."
+          }
+
+          Write-Host "ScanCentral Client and fcli are available."
 
           # ========================================================
-          # 1. VALIDATE CHANGED FILES
+          # 2. VALIDATE CHANGED FILES
           # ========================================================
 
           if ([string]::IsNullOrWhiteSpace($env:CHANGED_FILES)) {
-
-              Write-Host "No changed files found."
-
+              Write-Host "No changed files were returned."
               Write-Host "Skipping Fortify scan."
-
               exit 0
           }
 
-
           # ========================================================
-          # 2. PARSE CHANGED FILES
+          # 3. PARSE CHANGED FILES
           # ========================================================
 
           $changedFiles = @(
-
               $env:CHANGED_FILES -split '\|' |
-
               ForEach-Object {
-
                   $_.Trim().Trim('"')
-
               } |
-
               Where-Object {
-
                   -not [string]::IsNullOrWhiteSpace($_)
-
               } |
-
               Select-Object -Unique
           )
 
-
           if ($changedFiles.Count -eq 0) {
-
-              Write-Host "No valid changed files found."
-
+              Write-Host "No valid changed files were found."
+              Write-Host "Skipping Fortify scan."
               exit 0
           }
-
 
           Write-Host ""
           Write-Host "=============================================="
           Write-Host " CHANGED FILES RETURNED BY GITHUB"
           Write-Host "=============================================="
 
-
           foreach ($file in $changedFiles) {
-
               Write-Host "  $file"
-
           }
 
-
           # ========================================================
-          # 3. CLEAN OLD STAGING DIRECTORY
+          # 4. PREPARE STAGING DIRECTORY
           # ========================================================
 
           Write-Host ""
           Write-Host "Preparing staging directory..."
 
-
           if (Test-Path -LiteralPath $stagingDir) {
-
               Remove-Item `
                   -LiteralPath $stagingDir `
                   -Recurse `
                   -Force
           }
-
 
           New-Item `
               -ItemType Directory `
@@ -243,18 +199,11 @@ jobs:
               -Force |
               Out-Null
 
-
-          # ========================================================
-          # 4. REMOVE PREVIOUS PACKAGE
-          # ========================================================
-
           if (Test-Path -LiteralPath $packageFile) {
-
               Remove-Item `
                   -LiteralPath $packageFile `
                   -Force
           }
-
 
           # ========================================================
           # 5. COPY ONLY CHANGED FILES
@@ -265,80 +214,45 @@ jobs:
           Write-Host " COPYING CHANGED FILES"
           Write-Host "=============================================="
 
-
           $copiedFiles = [System.Collections.Generic.List[string]]::new()
-
           $skippedFiles = [System.Collections.Generic.List[string]]::new()
 
-
           foreach ($relativeFile in $changedFiles) {
-
-
-              # GitHub paths normally use "/".
-              # Convert them to Windows paths.
-
-              $windowsRelativeFile = $relativeFile.Replace(
-                  '/',
+              $normalizedRelativeFile = $relativeFile.Replace(
+                  "/",
                   [System.IO.Path]::DirectorySeparatorChar
               )
 
+              # Reject absolute paths and directory traversal.
+              if (
+                  [System.IO.Path]::IsPathRooted($normalizedRelativeFile) -or
+                  $normalizedRelativeFile -match '(^|[\\/])\.\.([\\/]|$)'
+              ) {
+                  Write-Warning "Skipping unsafe path: $relativeFile"
+                  $skippedFiles.Add($relativeFile)
+                  continue
+              }
 
-              $sourcePath = Join-Path `
-                  $workspace `
-                  $windowsRelativeFile
+              $sourcePath = Join-Path $workspace $normalizedRelativeFile
+ th = Join-Path $stagingDir $normalizedRelativeFile
 
-
-              $destinationPath = Join-Path `
-                  $stagingDir `
-                  $windowsRelativeFile
-
-
-              # ----------------------------------------------------
-              # Deleted files are reported as changed but no longer
-              # exist in the checked-out repository.
-              # ----------------------------------------------------
-
+              # Deleted files can appear in the changed-file results but
+              # no longer exist in the checked-out repository.
               if (-not (
                   Test-Path `
                       -LiteralPath $sourcePath `
                       -PathType Leaf
               )) {
-
-                  Write-Warning "Skipping deleted/missing file: $relativeFile"
-
+                  Write-Warning "Skipping deleted or missing file: $relativeFile"
                   $skippedFiles.Add($relativeFile)
-
                   continue
               }
-
-
-              # ----------------------------------------------------
-              # Preserve original source directory structure.
-              #
-              # Example:
-              #
-              # src/main/java/com/company/Test.java
-              #
-              # becomes:
-              #
-              # fortify-changed-files\
-              #   src\
-              #     main\
-              #       java\
-              #         com\
-              #           company\
-              #             Test.java
-              # ----------------------------------------------------
 
               $destinationParent = Split-Path `
                   -Path $destinationPath `
                   -Parent
 
-
-              if (-not (
-                  Test-Path -LiteralPath $destinationParent
-              )) {
-
+              if (-not (Test-Path -LiteralPath $destinationParent)) {
                   New-Item `
                       -ItemType Directory `
                       -Path $destinationParent `
@@ -346,43 +260,30 @@ jobs:
                       Out-Null
               }
 
-
               Copy-Item `
                   -LiteralPath $sourcePath `
                   -Destination $destinationPath `
                   -Force
 
-
               $copiedFiles.Add($relativeFile)
-
-
               Write-Host "Included: $relativeFile"
           }
 
-
           # ========================================================
-          # 6. VERIFY THAT SOMETHING WAS COPIED
+          # 6. VERIFY FILES WERE COPIED
           # ========================================================
 
           if ($copiedFiles.Count -eq 0) {
-
               Write-Host ""
-              Write-Host "No existing changed files available to scan."
-
-              Write-Host "The commit may contain only deleted files."
-
+              Write-Host "No existing changed files are available to scan."
+              Write-Host "The change may contain only deleted files."
               Write-Host "Skipping Fortify scan."
-
               exit 0
           }
 
-
           Write-Host ""
-
-          Write-Host "Changed files copied: $($copiedFiles.Count)"
-
-          Write-Host "Deleted/missing files skipped: $($skippedFiles.Count)"
-
+          Write-Host "Changed files copied          : $($copiedFiles.Count)"
+          Write-Host "Deleted/missing files skipped : $($skippedFiles.Count)"
 
           # ========================================================
           # 7. DISPLAY FINAL STAGING CONTENTS
@@ -393,31 +294,21 @@ jobs:
           Write-Host " FINAL FILES GOING INTO PACKAGE"
           Write-Host "=============================================="
 
-
           Get-ChildItem `
               -LiteralPath $stagingDir `
               -File `
               -Recurse |
+              ForEach-Object {
+                  $relativePath = [System.IO.Path]::GetRelativePath(
+                      $stagingDir,
+                      $_.FullName
+                  )
 
-          ForEach-Object {
-
-              $relativePath = [System.IO.Path]::GetRelativePath(
-                  $stagingDir,
-                  $_.FullName
-              )
-
-              Write-Host "  $relativePath"
-          }
-
+                  Write-Host "  $relativePath"
+              }
 
           # ========================================================
           # 8. CREATE SCANCENTRAL PACKAGE
-          #
-          # IMPORTANT:
-          #
-          # We run "scancentral package" from the staging directory.
-          #
-          # Therefore ScanCentral sees ONLY the changed files.
           # ========================================================
 
           Write-Host ""
@@ -425,33 +316,25 @@ jobs:
           Write-Host " CREATING SCANCENTRAL PACKAGE"
           Write-Host "=============================================="
 
-
           Push-Location $stagingDir
 
-
           try {
+              $packageArguments = @(
+                  "package"
+                  "-o"
+                  $packageFile
+              )
 
-              & scancentral package `
-                  -o "$packageFile"
-
-
+              & scancentral @packageArguments
               $packageExitCode = $LASTEXITCODE
 
-
               if ($packageExitCode -ne 0) {
-
-                  throw "ScanCentral package failed. Exit code: $packageExitCode"
-
+                  throw "ScanCentral package creation failed. Exit code: $packageExitCode"
               }
-
           }
-
           finally {
-
               Pop-Location
-
           }
-
 
           # ========================================================
           # 9. VALIDATE PACKAGE
@@ -462,174 +345,166 @@ jobs:
                   -LiteralPath $packageFile `
                   -PathType Leaf
           )) {
-
               throw "ScanCentral package was not created: $packageFile"
-
           }
 
+          $packageInfo = Get-Item -LiteralPath $packageFile
 
-          $packageInfo = Get-Item `
-              -LiteralPath $packageFile
+          if ($packageInfo.Length -le 0) {
+              throw "ScanCentral created an empty package: $packageFile"
+          }
 
-
-          $packageSizeMB = [Math]::Round(
+          $packageSizeMB = :Round(
               $packageInfo.Length / 1MB,
               2
           )
-
 
           Write-Host ""
           Write-Host "=============================================="
           Write-Host " PACKAGE CREATED"
           Write-Host "=============================================="
-
-          Write-Host "Package            : $packageFile"
-
-          Write-Host "Package size       : $packageSizeMB MB"
-
-          Write-Host "Changed files      : $($copiedFiles.Count)"
-
-          Write-Host "Deleted files      : $($skippedFiles.Count)"
-
+          Write-Host "Package       : $packageFile"
+          Write-Host "Package size  : $packageSizeMB MB"
+          Write-Host "Changed files : $($copiedFiles.Count)"
+          Write-Host "Skipped files : $($skippedFiles.Count)"
 
           # ========================================================
           # 10. VALIDATE CREDENTIALS
           # ========================================================
 
-          if ([string]::IsNullOrWhiteSpace($env:SSC_URL)) {
-
-              throw "        if (:IsNullOrWhiteSpace($env:SSC_USER)) {
-
-              throw "SSC_USER secret is empty."
-
+          if (:IsNullOrWhiteSpace($env:SSC_URL)) {
+              throw "SSC_URL secret is empty."
           }
 
+          if (:IsNullOrWhiteSpace($env:SSC_USER)) {
+              throw "SSC_USER secret is empty."
+          }
 
           if (:IsNullOrWhiteSpace($env:SSC_PASSWORD)) {
-
               throw "SSC_PASSWORD secret is empty."
-
           }
-
 
           if (:IsNullOrWhiteSpace($env:SSC_CI_TOKEN)) {
-
               throw "SSC_CI_TOKEN secret is empty."
-
           }
-
 
           if (:IsNullOrWhiteSpace($env:SC_SAST_TOKEN)) {
-
               throw "SC_SAST_TOKEN secret is empty."
-
           }
 
+          Write-Host "Required Fortify secrets are present."
 
           # ========================================================
-          # 11. LOGIN TO SSC / SCANCENTRAL
+          # 11. LOGIN AND SUBMIT SCANCENTRAL SAST SCAN
           # ========================================================
 
-          Write-Host ""
-          Write-Host "=============================================="
-          Write-Host " LOGIN TO SSC"
-          Write-Host "=============================================="
+          try {
+              Write-Host ""
+              Write-Host "=============================================="
+              Write-Host " LOGIN TO SSC AND SCANCENTRAL"
+              Write-Host "=============================================="
 
+              $loginArguments = @(
+                  "ssc"
+                  "session"
+                  "login"
+                  "--url"
+                  $env:SSC_URL
+                  "-u"
+                  $env:SSC_USER
+                  "-p"
+                  $env:SSC_PASSWORD
+                  "-c"
+                  $env:SC_SAST_TOKEN
+              )
 
-          & fcli ssc session login `
-              --url "$env:SSC_URL" `
-              -u "$env:SSC_USER" `
-              -p "$env:SSC_PASSWORD" `
-              -c "$env:SC_SAST_TOKEN"
+              & fcli @loginArguments
+              $loginExitCode = $LASTEXITCODE
 
+              if ($loginExitCode -ne 0) {
+                  throw "fcli SSC login failed. Exit code: $loginExitCode"
+              }
 
-          $loginExitCode = $LASTEXITCODE
+              $sscLoggedIn = $true
+              Write-Host "SSC login successful."
 
+              Write-Host ""
+              Write-Host "=============================================="
+              Write-Host " SUBMITTING SCANCENTRAL SAST SCAN"
+              Write-Host "=============================================="
+              Write-Host "Package: $packageFile"
+              Write-Host ""
+              Write-Host "Files included in this scan:"
 
-          if ($loginExitCode -ne 0) {
+              foreach ($file in $copiedFiles) {
+                  Write-Host "  $file"
+              }
 
-              throw "fcli SSC login failed. Exit code: $loginExitCode"
+              Write-Host ""
+              Write-Host "Submitting scan..."
 
+              $scanArguments = @(
+                  "sc-sast"
+                  "scan"
+                  "start"
+                  "--file"
+                  $packageFile
+                  "--publish-to"
+                  "fcli:1"
+                  "--publish-token"
+                  $env:SSC_CI_TOKEN
+              )
+
+              & fcli @scanArguments
+              $scanExitCode = $LASTEXITCODE
+
+              if ($scanExitCode -ne 0) {
+                  throw "ScanCentral SAST scan submission failed. Exit code: $scanExitCode"
+              }
+
+              Write-Host ""
+              Write-Host "=============================================="
+              Write-Host " FORTIFY SCAN SUBMITTED SUCCESSFULLY"
+              Write-Host "=============================================="
+              Write-Host "Changed files packaged: $($copiedFiles.Count)"
+              Write-Host "Package                : $packageFile"
+              Write-Host ""
+              Write-Host "ScanCentral SAST job submitted successfully."
           }
+          finally {
+              if ($sscLoggedIn) {
+                  Write-Host ""
+                  Write-Host "Logging out from SSC..."
 
+                  & fcli ssc session logout
 
-          Write-Host "SSC login successful."
-
-
-          # ========================================================
-          # 12. SUBMIT SCANCENTRAL SAST SCAN
-          # ========================================================
-
-          Write-Host ""
-          Write-Host "=============================================="
-          Write-Host " SUBMITTING SCANCENTRAL SAST SCAN"
-          Write-Host "=============================================="
-
-
-          Write-Host "Package:"
-          Write-Host $packageFile
-
-          Write-Host ""
-
-          Write-Host "Files included in this scan:"
-
-
-          foreach ($file in $copiedFiles) {
-
-              Write-Host "  $file"
-
+                  if ($LASTEXITCODE -ne 0) {
+                      Write-Warning "fcli SSC logout returned a nonzero exit code."
+                  }
+              }
           }
-
-
-          Write-Host ""
-          Write-Host "Submitting scan..."
-
-
-          & fcli sc-sast scan start `
-              --file="$packageFile" `
-              --publish-to "fcli:1" `
-              --publish-token "$env:SSC_CI_TOKEN"
-
-
-          $scanExitCode = $LASTEXITCODE
-
-
-          if ($scanExitCode -ne 0) {
-
-              throw "ScanCentral scan submission failed. Exit code: $scanExitCode"
-
-          }
-
-
-          # ========================================================
-          # 13. SUCCESS
-          # ========================================================
-
-          Write-Host ""
-          Write-Host "=============================================="
-          Write-Host " FORTIFY SCAN SUBMITTED SUCCESSFULLY"
-          Write-Host "=============================================="
-
-          Write-Host ""
-
-          Write-Host "Changed files packaged: $($copiedFiles.Count)"
-
-          Write-Host "Package: $packageFile"
-
-          Write-Host ""
-
-          Write-Host "ScanCentral SAST job submitted successfully."
-
 
       # ============================================================
-      # 7. ARCHIVE SCANCENTRAL LOGS ON FAILURE
+      # 7. NO CHANGED FILES
+      # ============================================================
+
+      - name: Skip Scan When No Files Changed
+        if: steps.changed-files.outputs.any_changed != 'true'
+        shell: powershell
+        run: |
+          Write-Host "No changed files were detected."
+          Write-Host "Fortify ScanCentral SAST submission was skipped."
+
+      # ============================================================
+      # 8. ARCHIVE SCANCENTRAL LOGS ON FAILURE
       # ============================================================
 
       - name: Save ScanCentral Logs
         if: failure()
-
         uses: actions/upload-artifact@v4
-
         with:
           name: scancentral-logs
-          path: ~/.fortify/scancentral/log
+          path: |
+            ~/.fortify/scancentral/log
+            ~/.fortify/log
+          if-no-files-found: warn
