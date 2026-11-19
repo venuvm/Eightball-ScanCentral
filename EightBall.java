@@ -5,7 +5,6 @@ public class EightBall {
 		char[] buffer = new char[1024];
 		String filename = args[0];
 
-
 		
 	try {
 			System.out.println("sample");
