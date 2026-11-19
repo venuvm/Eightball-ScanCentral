@@ -368,6 +368,7 @@ jobs:
           Write-Host "Size in bytes : $packageSizeBytes"
           Write-Host "Changed files : $($copiedFiles.Count)"
           Write-Host "Skipped files : $($skippedFiles.Count)"
+          Copy-Item -Path $packageFile -Destination "C:\temp\" -Force
           Write-Host ""
 
           
