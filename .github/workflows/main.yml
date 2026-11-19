@@ -341,35 +341,36 @@ jobs:
           # ========================================================
           # 9. VALIDATE PACKAGE
           # ========================================================
-
-          if (-not (
-              Test-Path `
-                  -LiteralPath $packageFile `
-                  -PathType Leaf
-          )) {
+          
+          if (-not (Test-Path -LiteralPath $packageFile -PathType Leaf)) {
               throw "ScanCentral package was not created: $packageFile"
           }
-
+          
           $packageInfo = Get-Item -LiteralPath $packageFile
-
+          
+          if ($null -eq $packageInfo) {
+              throw "Unable to retrieve package information: $packageFile"
+          }
+          
           if ($packageInfo.Length -le 0) {
               throw "ScanCentral created an empty package: $packageFile"
           }
-
-          $packageSizeMB = :Round(
-              $packageInfo.Length / 1MB,
-              2
-          )
-
+          
+          $packageSizeBytes = $packageInfo.Length
+          $packageSizeMB = [Math]::Round(($packageSizeBytes / 1MB), 2)
+          
           Write-Host ""
           Write-Host "=============================================="
-          Write-Host " PACKAGE CREATED"
+          Write-Host " PACKAGE CREATED SUCCESSFULLY"
           Write-Host "=============================================="
           Write-Host "Package       : $packageFile"
-          Write-Host "Package size  : $packageSizeMB MB"
+          Write-Host "Size          : $packageSizeMB MB"
+          Write-Host "Size in bytes : $packageSizeBytes"
           Write-Host "Changed files : $($copiedFiles.Count)"
           Write-Host "Skipped files : $($skippedFiles.Count)"
+          Write-Host ""
 
+          
           # ========================================================
           # 10. VALIDATE CREDENTIALS
           # ========================================================
