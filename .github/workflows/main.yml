@@ -288,25 +288,35 @@ jobs:
           # ========================================================
           # 7. DISPLAY FINAL STAGING CONTENTS
           # ========================================================
-
+          
           Write-Host ""
           Write-Host "=============================================="
           Write-Host " FINAL FILES GOING INTO PACKAGE"
           Write-Host "=============================================="
-
+          
+          $stagingPrefix = $stagingDir.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+          
           Get-ChildItem `
               -LiteralPath $stagingDir `
               -File `
               -Recurse |
               ForEach-Object {
-                  $relativePath = [System.IO.Path]::GetRelativePath(
-                      $stagingDir,
-                      $_.FullName
-                  )
-
+          
+                  $fullPath = $_.FullName
+          
+                  if ($fullPath.StartsWith(
+                      $stagingPrefix,
+                      [System.StringComparison]::OrdinalIgnoreCase
+                  )) {
+                      $relativePath = $fullPath.Substring($stagingPrefix.Length)
+                  }
+                  else {
+                      $relativePath = $_.Name
+                  }
+          
                   Write-Host "  $relativePath"
               }
-
+          
           # ========================================================
           # 8. CREATE SCANCENTRAL PACKAGE
           # ========================================================
