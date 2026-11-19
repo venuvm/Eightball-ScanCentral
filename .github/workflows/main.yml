@@ -374,28 +374,34 @@ jobs:
           # ========================================================
           # 10. VALIDATE CREDENTIALS
           # ========================================================
-
-          if (:IsNullOrWhiteSpace($env:SSC_URL)) {
+          
+          Write-Host ""
+          Write-Host "=============================================="
+          Write-Host " VALIDATING FORTIFY CREDENTIALS"
+          Write-Host "=============================================="
+          
+          if ([string]::IsNullOrWhiteSpace($env:SSC_URL)) {
               throw "SSC_URL secret is empty."
           }
-
-          if (:IsNullOrWhiteSpace($env:SSC_USER)) {
+          
+          if ([string]::IsNullOrWhiteSpace($env:SSC_USER)) {
               throw "SSC_USER secret is empty."
           }
-
-          if (:IsNullOrWhiteSpace($env:SSC_PASSWORD)) {
+          
+          if ([string]::IsNullOrWhiteSpace($env:SSC_PASSWORD)) {
               throw "SSC_PASSWORD secret is empty."
           }
-
-          if (:IsNullOrWhiteSpace($env:SSC_CI_TOKEN)) {
+          
+          if ([string]::IsNullOrWhiteSpace($env:SSC_CI_TOKEN)) {
               throw "SSC_CI_TOKEN secret is empty."
           }
-
-          if (:IsNullOrWhiteSpace($env:SC_SAST_TOKEN)) {
+          
+          if ([string]::IsNullOrWhiteSpace($env:SC_SAST_TOKEN)) {
               throw "SC_SAST_TOKEN secret is empty."
           }
+          
+          Write-Host "All required Fortify credentials are present."
 
-          Write-Host "Required Fortify secrets are present."
 
           # ========================================================
           # 11. LOGIN AND SUBMIT SCANCENTRAL SAST SCAN
